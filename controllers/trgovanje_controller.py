@@ -12,55 +12,27 @@ import numpy as np
 import yfinance as yf
 from sklearn.svm import SVR
 from datetime import date, timedelta
+from controllers.diagonal_gradient import create_diagonal_gradient
+from controllers.plotaj import plotaj
+from controllers.get_data import get_data,get_last_data
 
 euro = unicodedata.lookup("EURO SIGN")
 connection = sqlite3.connect('dionice.db')
 cursor=connection.cursor()
 
-def create_diagonal_gradient(canvas,koji, width, height):
-    if(koji==1):
-        end_rgb = (4, 2, 13)
-        start_rgb = (20, 0, 150)
-    elif(koji==2):
-        end_rgb = (4, 13, 2)
-        start_rgb = (20, 150, 0)
-    else:
-        end_rgb = (13, 2, 4)
-        start_rgb = (150, 0, 20)
-    step = 2
-    for i in range(0, width + height, step):
-        ratio = i / (width + height)
-        
-        r = int(start_rgb[0] + (end_rgb[0] - start_rgb[0]) * ratio)
-        g = int(start_rgb[1] + (end_rgb[1] - start_rgb[1]) * ratio)
-        b = int(start_rgb[2] + (end_rgb[2] - start_rgb[2]) * ratio)
-        
-        color = f'#{r:02x}{g:02x}{b:02x}'
-        
-        canvas.create_line(i, 0, 0, i, fill=color, width=step)
-        
-
-def plotaj(ime):
-    cursor.execute("SELECT POVIJEST_CIJENA.CIJENA FROM POVIJEST_CIJENA JOIN DIONICE ON POVIJEST_CIJENA.ID_DIONICE=DIONICE.ID_DIONICE WHERE DIONICE.IME_DIONICE = ?",(ime,))
-    Povijest =[red[0] for red in cursor.fetchall()]
-    x1=[]
-    for i in range(0,len(Povijest)):
-        x1.append(i)
-    plt.plot(x1,Povijest, c = "green", label = ime)
-    plt.xlabel("Vrijeme")
-    plt.ylabel("Cijena dionice")
-    plt.title(f"Cijena dionice {ime}")
-    plt.show()
-    
-
+def ticker_from_name(ime):
+    cursor.execute("SELECT TICKER FROM DIONICE WHERE DIONICE.IME_DIONICE=?",(ime,))
+    ticker=cursor.fetchone()
+    return ticker
 
 def build_canvas(main_window,canvas1, canvas2,canvas3,dionice_tab,investicije_tab,options_tab, hash_lozinka, id_korisnika,photos):
     create_diagonal_gradient(canvas1, 1, 1000, 750)
     create_diagonal_gradient(canvas2, 2, 1000, 750)
     create_diagonal_gradient(canvas3, 3, 1000, 750)
-    cursor.execute("SELECT TICKER,IME_DIONICE,CIJENA FROM DIONICE")
+    cursor.execute("SELECT TICKER,IME_DIONICE FROM DIONICE")
     row1 = cursor.fetchall()
-    cursor.execute("SELECT IME_KORISNIKA,PREZIME_KORISNIKA,CASH,IME_DIONICE,CIJENA,KOLIKO,PROSJECNA_CIJENA FROM KORISNICI JOIN INVESTICIJE ON KORISNICI.ID_KORISNIKA=INVESTICIJE.ID_KORISNIKA JOIN DIONICE ON INVESTICIJE.ID_DIONICE=DIONICE.ID_DIONICE  WHERE KORISNICI.ID_KORISNIKA=?",(id_korisnika,))
+
+    cursor.execute("SELECT IME_KORISNIKA,PREZIME_KORISNIKA,CASH,IME_DIONICE,KOLIKO,PROSJECNA_CIJENA FROM KORISNICI JOIN INVESTICIJE ON KORISNICI.ID_KORISNIKA=INVESTICIJE.ID_KORISNIKA JOIN DIONICE ON INVESTICIJE.ID_DIONICE=DIONICE.ID_DIONICE  WHERE KORISNICI.ID_KORISNIKA=?",(id_korisnika,))
     row2 = cursor.fetchall()
     
     
@@ -90,8 +62,17 @@ def build_canvas(main_window,canvas1, canvas2,canvas3,dionice_tab,investicije_ta
         left_text= Label(button_frame1, height=5,text=f"{dionica[0]} {dionica[1]} ",font=('Times New Roman',15),bg="#2000f0",fg="#ffffff")
         left_text.pack(side="left",padx=10)
         left_text.bind("<Button-1>", lambda event, ime=dionica[1]: plotaj(ime))
-        
-        right_text= Label(button_frame1, height=5, text=f"{dionica[2]:.2f} {euro}",font=('Times New Roman',15),bg="#2000f0",fg="#ffffff")
+
+        ticker_symbol = dionica[0]
+        start_date = "2026-01-01"
+        end_date = (date.today() + timedelta(days=1)).strftime("%Y-%m-%d")
+
+        df = yf.download(ticker_symbol, start=start_date, end=end_date)
+        output_filename = f"{ticker_symbol}_historical_prices.csv"
+        df.to_csv(output_filename)
+
+        cijena=get_last_data(dionica[0])
+        right_text= Label(button_frame1, height=5, text=f"{cijena:.2f} {euro}",font=('Times New Roman',15),bg="#2000f0",fg="#ffffff")
         right_text.pack(side="right",padx=10)
         right_text.bind("<Button-1>", lambda event, ime=dionica[1]: plotaj(ime))
 
@@ -102,30 +83,32 @@ def build_canvas(main_window,canvas1, canvas2,canvas3,dionice_tab,investicije_ta
     for investicija in row2:
         button_frame2 = Frame(main_window,bg="#20b000",highlightbackground="white",highlightthickness=2,width=30,height=5)
         button_frame2.pack(padx=20,pady=10)
-        button_frame2.bind("<Button-1>", lambda event, ime=dionica[1]: plotaj(ime))
+        button_frame2.bind("<Button-1>", lambda event, ime=investicija[3]: plotaj(ime))
 
-        left_text= Label(button_frame2, height=5,text=f"{investicija[3]} {investicija[4]:.2f} {euro}",font=('Times New Roman',15),bg="#20b000",fg="#ffffff")
+        cijena=get_last_data(ticker_from_name(investicija[3]))
+        left_text= Label(button_frame2, height=5,text=f"{investicija[3]} {cijena:.2f} {euro}",font=('Times New Roman',15),bg="#20b000",fg="#ffffff")
         left_text.pack(side="left",padx=10)
-        left_text.bind("<Button-1>", lambda event, ime=dionica[1]: plotaj(ime))
+        left_text.bind("<Button-1>", lambda event, ime=investicija[3]: plotaj(ime))
         
-        cursor.execute("SELECT CIJENA FROM (SELECT ID_PROMJENE,POVIJEST_CIJENA.CIJENA FROM POVIJEST_CIJENA JOIN DIONICE ON POVIJEST_CIJENA.ID_DIONICE=DIONICE.ID_DIONICE WHERE DIONICE.IME_DIONICE = ? ORDER BY ID_PROMJENE DESC LIMIT 10) AS LASTTEN ORDER BY ID_PROMJENE ASC",(investicija[3],))
+        dates=[]
+        prices=[]
+        ticker_symbol = ticker_from_name(investicija[3])[0]
+        print("OVO JE TICKER ",ticker_symbol)
+        output_filename = f"{ticker_symbol}_historical_prices.csv"
 
-        Povijest =[red[0] for red in cursor.fetchall()]
-
-        x1=[]
-        for i in range(0,len(Povijest)):
-            x1.append(i)
+        get_data(output_filename,dates,prices)
+        print(dates[0],prices[0])
         plt.figure(figsize=(1, 1), dpi=100,facecolor="white")
-        plt.plot(x1,Povijest, c = "green")
+        plt.plot(dates,prices, c = "green")
         plt.axis('off')
-        plt.savefig(f"{investicija[3]}.png",facecolor="white")
+        plt.savefig(f"{ticker_symbol}.png",facecolor="white")
         plt.close()
 
-        img = Image.open(f"{investicija[3]}.png").resize((80,80),Image.Resampling.LANCZOS)
+        img = Image.open(f"{ticker_symbol}.png").resize((80,80),Image.Resampling.LANCZOS)
         photo = ImageTk.PhotoImage(img)
         photos.append(photo)
         
-        right_text= Label(button_frame2,image=photo, height=100, text=f"Ukupna vrijednost = {investicija[5]:.2f} x {investicija[4]:.2f} = {investicija[5]*investicija[4]:.2f} {euro}   ",font=('Times New Roman',15),compound="right",bg="#20b000",fg="#ffffff")
+        right_text= Label(button_frame2,image=photo, height=100, text=f"Ukupna vrijednost = {investicija[4]:.2f} x {cijena:.2f} = {cijena*investicija[4]:.2f} {euro}   ",font=('Times New Roman',15),compound="right",bg="#20b000",fg="#ffffff")
         right_text.pack(side="right",padx=10)
         right_text.bind("<Button-1>", lambda event, ime=investicija[3]: plotaj(ime))
         
@@ -197,14 +180,7 @@ def otvori_option(podaci):
     predict_prices(ticker,dates,prices,len(dates))
     
     
-def get_data(filename,dates,prices):
-    with open(filename, 'r') as csvfile:
-        reader = csv.reader(csvfile)
-        for row in reader:
-            if not row[0][:4].isdigit():
-                continue
-            dates.append(len(dates))     
-            prices.append(float(row[1]))
+
             
 def predict_prices(ticker,dates, prices, x,loading=None):
     dates = np.reshape(dates, (len(dates), 1))
@@ -309,31 +285,4 @@ def predict_prices(ticker,dates, prices, x,loading=None):
     plt.show()
 
 
-"""
-def simuliraj(main_window,canvas1, canvas2,canvas3,dionice_tab,investicije_tab,options_tab, hash_lozinka, id_korisnika,photos):
 
-    cursor.execute("SELECT ID_DIONICE,IME_DIONICE,CIJENA FROM DIONICE")
-    row = cursor.fetchall()
-
-    lista_dionica=[]
-    for dionica in row:
-        lista_dionica.append(Dionica(dionica[0],dionica[1],dionica[2]))
-    for dionica in lista_dionica:
-        dionica.simuliraj("neutralan")
-        cursor.execute("UPDATE DIONICE SET CIJENA=? WHERE ID_DIONICE=?",(dionica.cijena,dionica.id_dionice,))
-        cursor.execute("INSERT INTO POVIJEST_CIJENA (ID_DIONICE, CIJENA) VALUES (?, ?)",(dionica.id_dionice,dionica.cijena,))
-        connection.commit()
-
-    for widget in canvas1.winfo_children():
-        widget.destroy()
-    canvas1.delete("all")
-
-    for widget in canvas2.winfo_children():
-        widget.destroy()
-    canvas2.delete("all")
-
-    photos.clear()
-    
-    build_canvas(main_window,canvas1, canvas2,canvas3,dionice_tab,investicije_tab,options_tab, hash_lozinka, id_korisnika,photos)
-    main_window.after(6000,lambda: simuliraj(main_window,canvas1, canvas2,canvas3,dionice_tab,investicije_tab,options_tab, hash_lozinka, id_korisnika,photos))
-"""
