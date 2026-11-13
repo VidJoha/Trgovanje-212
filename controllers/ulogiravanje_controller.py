@@ -61,7 +61,7 @@ def log_in(event=None,skip=False,log_in_window=None,imeentry=None,prezimeentry=N
             canvas3 = Canvas(options_tab,width=1000,height=750)
             canvas3.pack(fill="both",expand=True)
             
-            build_canvas(main_window,canvas1, canvas2,canvas3,dionice_tab,investicije_tab,options_tab, hash_lozinka, id_korisnika,photos)
+            build_canvas(main_window,canvas1, canvas2,canvas3,dionice_tab,investicije_tab,options_tab, id_korisnika,photos)
             main_window.mainloop()
         else:
             print("fail")

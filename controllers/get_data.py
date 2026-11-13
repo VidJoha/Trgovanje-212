@@ -14,6 +14,8 @@ def get_data(filename,dates,prices):
             prices.append(float(row[1]))
 
 def get_last_data(ticker_symbol):
+    if not ticker_symbol:
+        return None
     if isinstance(ticker_symbol, (tuple, list)):
         ticker_symbol = ticker_symbol[0]
     BASE_DIR = Path(__file__).resolve().parent.parent

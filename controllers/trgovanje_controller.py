@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 import sqlite3
 import unicodedata
 from PIL import Image, ImageTk
-from matplotlib.widgets import RadioButtons, TextBox,Button
+from matplotlib.widgets import RadioButtons, TextBox
+from matplotlib.widgets import Button as mButton
 import csv
 import numpy as np
 import yfinance as yf
@@ -15,17 +16,60 @@ from datetime import date, timedelta
 from controllers.diagonal_gradient import create_diagonal_gradient
 from controllers.plotaj import plotaj
 from controllers.get_data import get_data,get_last_data
-
+from models.AutocompleteEntry import AutocompleteEntry
 euro = unicodedata.lookup("EURO SIGN")
 connection = sqlite3.connect('dionice.db')
 cursor=connection.cursor()
+
 
 def ticker_from_name(ime):
     cursor.execute("SELECT TICKER FROM DIONICE WHERE DIONICE.IME_DIONICE=?",(ime,))
     ticker=cursor.fetchone()
     return ticker
 
-def build_canvas(main_window,canvas1, canvas2,canvas3,dionice_tab,investicije_tab,options_tab, hash_lozinka, id_korisnika,photos):
+def otvori_kupi_window(id_korisnika):
+    kupi_window = Toplevel() 
+    kupi_window.geometry("1000x700")
+    kupi_window.title("Kupi212")
+    kupi_window.configure(bg="#ffffff")
+
+    cursor.execute("SELECT IME_DIONICE,TICKER FROM KORISNICI JOIN INVESTICIJE ON KORISNICI.ID_KORISNIKA=INVESTICIJE.ID_KORISNIKA JOIN DIONICE ON INVESTICIJE.ID_DIONICE=DIONICE.ID_DIONICE  WHERE KORISNICI.ID_KORISNIKA=?",(id_korisnika,))
+    row = cursor.fetchall()
+
+    sve_opcije=[]
+    for i in row:
+        temp=str(i[1])+", ("+str(i[0])+")"
+        sve_opcije.append(temp)
+        
+    stanje = {"ticker": None, "cijena": None}
+    ukupno_var = StringVar(master=kupi_window, value="Ukupno: -")
+
+    kupi_label1= Label(kupi_window, text=f"Odaberi dionicu i količinu",font=('Times New Roman',20),highlightbackground="white",highlightthickness=2,bg="#2000f0",fg="#ffffff")
+    kupi_label1.pack(expand=True,fill="x")
+    kupi_label2= Label(kupi_window, text=f"Dionica",font=('Times New Roman',15),highlightbackground="white",highlightthickness=2,bg="#2000f0",fg="#ffffff")
+    kupi_label2.pack(expand=True,fill="x")
+    listaEntry = AutocompleteEntry(kupi_window,sve_opcije=sve_opcije)
+    listaEntry.pack(padx=20, pady=20, fill="x")
+
+    ticker = listaEntry.get().split(',', 1)[0]  
+    cijena = get_last_data(ticker)
+    
+    kupi_label3= Label(kupi_window, text=f"Količina",font=('Times New Roman',15),highlightbackground="white",highlightthickness=2,bg="#2000f0",fg="#ffffff")
+    kupi_label3.pack(expand=True,fill="x")
+    kolicinaEntry = Entry(kupi_window,sve_opcije=sve_opcije)
+    kolicinaEntry.pack(padx=20, pady=20, fill="x")
+    kupi_label3= Label(kupi_window, text=f"float{kolicinaEntry.get()} x {cijena} = {float(kolicinaEntry.get())/cijena}",font=('Times New Roman',15),highlightbackground="white",highlightthickness=2,bg="#2000f0",fg="#ffffff")
+    kupi_label3.pack(expand=True,fill="x")
+
+    kupi_button = Button(kupi_window, text="Kupi dionicu",font=('Times New Roman',20),highlightbackground="white",highlightthickness=2,bg="#20b000",fg="#ffffff", command=lambda: otvori_kupi_window(id_korisnika))
+    kupi_button.pack(expand=True,fill="x")
+
+def obradi_kupnju(id_korisnika,ticker,kolicina):
+    cijena = get_last_data(ticker)
+
+
+
+def build_canvas(main_window,canvas1, canvas2,canvas3,dionice_tab,investicije_tab,options_tab, id_korisnika,photos):
     create_diagonal_gradient(canvas1, 1, 1000, 750)
     create_diagonal_gradient(canvas2, 2, 1000, 750)
     create_diagonal_gradient(canvas3, 3, 1000, 750)
@@ -34,8 +78,7 @@ def build_canvas(main_window,canvas1, canvas2,canvas3,dionice_tab,investicije_ta
 
     cursor.execute("SELECT IME_KORISNIKA,PREZIME_KORISNIKA,CASH,IME_DIONICE,KOLIKO,PROSJECNA_CIJENA FROM KORISNICI JOIN INVESTICIJE ON KORISNICI.ID_KORISNIKA=INVESTICIJE.ID_KORISNIKA JOIN DIONICE ON INVESTICIJE.ID_DIONICE=DIONICE.ID_DIONICE  WHERE KORISNICI.ID_KORISNIKA=?",(id_korisnika,))
     row2 = cursor.fetchall()
-    
-    
+
     main_label1= Label(dionice_tab, text=f"Korisnik: {row2[0][0]}",font=('Times New Roman',20),highlightbackground="white",highlightthickness=2,bg="#2000f0",fg="#ffffff")
     main_label1.pack(expand=True,fill="both")
     main_label2= Label(investicije_tab, text=f"Korisnik: {row2[0][0]}",font=('Times New Roman',20),highlightbackground="white",highlightthickness=2,bg="#20b000",fg="#ffffff")
@@ -46,12 +89,17 @@ def build_canvas(main_window,canvas1, canvas2,canvas3,dionice_tab,investicije_ta
     main_label4.pack(expand=True,fill="both")
     main_label5= Label(options_tab, text=f"Cash: {row2[0][2]}",font=('Times New Roman',20),highlightbackground="white",highlightthickness=2,bg="#f02000",fg="#ffffff")
     main_label5.pack(expand=True,fill="both")
-    
+
     canvas1.create_window(500,50,window=main_label1)
-    canvas2.create_window(500,50,window=main_label2)
-    canvas2.create_window(500,100,window=main_label3)
+    canvas2.create_window(400,50,window=main_label2)
+    canvas2.create_window(600,50,window=main_label3)
     canvas3.create_window(500,50,window=main_label4)
     canvas3.create_window(500,100,window=main_label5)
+
+    kupi_button = Button(investicije_tab, text="Kupi dionicu",font=('Times New Roman',20),highlightbackground="white",highlightthickness=2,bg="#20b000",fg="#ffffff", command=lambda: otvori_kupi_window(id_korisnika))
+    kupi_button.pack(expand=True,fill="both")
+    canvas2.create_window(500, 100, window=kupi_button)
+            
     
     y=150
     for dionica in row1:
@@ -78,6 +126,7 @@ def build_canvas(main_window,canvas1, canvas2,canvas3,dionice_tab,investicije_ta
 
         canvas1.create_window(500,y,window=button_frame1)
         y+=150
+
     y=200
     
     for investicija in row2:
@@ -141,9 +190,7 @@ def build_canvas(main_window,canvas1, canvas2,canvas3,dionice_tab,investicije_ta
         start_date = "2026-01-01"
         end_date = (date.today() + timedelta(days=1)).strftime("%Y-%m-%d")
 
-        df = yf.download(ticker_symbol, start=start_date, end=end_date)
         output_filename = f"{ticker_symbol}_historical_prices.csv"
-        df.to_csv(output_filename)
 
         get_data(output_filename,dates,prices)
         podaci=[dionica[0],dates,prices]
@@ -248,7 +295,7 @@ def predict_prices(ticker,dates, prices, x,loading=None):
     ukupna_zarada=fig.text(x0,0.30,"",fontsize=11,color='black')
     
     btn_box = fig.add_axes([x0, 0.2, 0.08, 0.06])
-    btn = Button(btn_box, "Calculate")
+    btn = mButton(btn_box, "Calculate")
     
     def update(_=None):
         try:
